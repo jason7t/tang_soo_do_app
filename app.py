@@ -627,6 +627,7 @@ with tab_excel:
   if excel_file and st.button("Verwerk Excel"):
     try:
       df = pd.read_excel(excel_file, usecols="A:F")
+      df = df.dropna(subset=['naam'])
     except Exception as e:
       st.error(
           "❌ Kan het bestand niet lezen. Zorg dat het een geldig"

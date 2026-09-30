@@ -1,13 +1,10 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import database
 import pandas as pd
 import streamlit as st
 import extra_streamlit_components as stx
 
 database.init_database()
-
-# ALTIJD ALS EERSTE: Pagina configuratie
-st.set_page_config(page_title="Tang Soo Do Beheer", layout="wide")
 
 # ALTIJD ALS EERSTE: Pagina configuratie
 st.set_page_config(page_title="Tang Soo Do Beheer", layout="wide")
@@ -37,7 +34,7 @@ if not st.session_state.ingelogd:
             st.session_state.ingelogd = True
             
             # Sla een cookie op die 1 uur geldig blijft
-            verval_tijd = datetime.datetime.now() + datetime.timedelta(hours=1)
+            verval_tijd = datetime.now() + timedelta(hours=1)
             cookie_manager.set("tang_soo_do_login", "wel_ingelogd", expires_at=verval_tijd)
             
             st.success("Succesvol ingelogd!")

@@ -2,29 +2,48 @@ from datetime import date, datetime
 import database
 import pandas as pd
 import streamlit as st
+import extra_streamlit_components as stx
 
 database.init_database()
 
-# --- SIMPELE INLOGBEVEILIGING ---
+# ALTIJD ALS EERSTE: Pagina configuratie
+st.set_page_config(page_title="Tang Soo Do Beheer", layout="wide")
+
+# --- SIMPELE INLOGBEVEILIGING MET COOKIES ---
+@st.cache_resource(hash_funcs={"_thread.RLock": lambda _: None})
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
+
+# Controleer of er al een cookie is opgeslagen
+ingelogd_cookie = cookie_manager.get(cookie="tang_soo_do_login")
+
 if "ingelogd" not in st.session_state:
-  st.session_state.ingelogd = False
+    if ingelogd_cookie == "wel_ingelogd":
+        st.session_state.ingelogd = True
+    else:
+        st.session_state.ingelogd = False
 
 if not st.session_state.ingelogd:
-  st.title("🔒 Tang Soo Do Beheer — Inloggen")
-  gebruikersnaam = st.text_input("Gebruikersnaam")
-  wachtwoord = st.text_input("Wachtwoord", type="password")
+    st.title("🔒 Tang Soo Do Beheer — Inloggen")
+    gebruikersnaam = st.text_input("Gebruikersnaam")
+    wachtwoord = st.text_input("Wachtwoord", type="password")
 
-  if st.button("Inloggen"):
-    # Je kunt hier je eigen gebruikersnaam en wachtwoord kiezen
-    if gebruikersnaam == "beheerder" and wachtwoord == "tangSOOdoMEY2026!":
-      st.session_state.ingelogd = True
-      st.success("Succesvol ingelogd!")
-      st.rerun()
-    else:
-      st.error("Onjuiste gebruikersnaam of wachtwoord.")
-  st.stop()  # Stopt de app hieronder zodat niemand erbij kan zonder inloggen
-
-st.set_page_config(page_title="Tang Soo Do Beheer", layout="wide")
+    if st.button("Inloggen"):
+        if gebruikersnaam == "beheerder" and wachtwoord == "tangSOOdoMEY2026!":
+            st.session_state.ingelogd = True
+            
+            # Sla een cookie op die 1 uur geldig blijft
+            verval_tijd = datetime.datetime.now() + datetime.timedelta(hours=1)
+            cookie_manager.set("tang_soo_do_login", "wel_ingelogd", expires_at=verval_tijd)
+            
+            st.success("Succesvol ingelogd!")
+            st.rerun()
+        else:
+            st.error("Onjuiste gebruikersnaam of wachtwoord.")
+    
+    st.stop()  # Stopt de app hieronder zodat niemand erbij kan zonder inloggen
 
 st.markdown(
     """
@@ -492,7 +511,7 @@ with tab_agenda:
     with col_d1:
         gekozen_datum = st.date_input("Selecteer datum", value=date.today())
     
-    gekozen_datum_str = gekozen_datum.strftime("%Y-%m-%d")
+    gekozen_datum_str = gekozen_datum.strftime("%d-%m-%Y")
     dag_van_week = gekozen_datum.strftime("%A") # Bijv. Monday, Wednesday, Friday
     
     # Vertaling dag naar Nederlands voor de visuele check

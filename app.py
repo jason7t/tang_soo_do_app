@@ -655,8 +655,13 @@ with tab_excel:
             if pd.notna(row["geboortedatum"])
             else ""
         )
-        if isinstance(row.get("geboortedatum"), datetime):
-          geb_raw = row["geboortedatum"].strftime("%d-%m-%Y")
+        geb_val = row.get("geboortedatum")
+        if pd.isna(geb_val) or geb_val is None:
+            geb_raw = ""
+        elif isinstance(geb_val, datetime):
+            geb_raw = geb_val.strftime("%d-%m-%Y")
+        else:
+            geb_raw = str(geb_val)
 
         geldig, resultaat_geb = valideer_en_parse_datum(geb_raw)
         if not geldig:

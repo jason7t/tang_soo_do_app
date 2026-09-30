@@ -9,8 +9,10 @@ database.init_database()
 # ALTIJD ALS EERSTE: Pagina configuratie
 st.set_page_config(page_title="Tang Soo Do Beheer", layout="wide")
 
+# ALTIJD ALS EERSTE: Pagina configuratie
+st.set_page_config(page_title="Tang Soo Do Beheer", layout="wide")
+
 # --- SIMPELE INLOGBEVEILIGING MET COOKIES ---
-@st.cache_resource(hash_funcs={"_thread.RLock": lambda _: None})
 def get_cookie_manager():
     return stx.CookieManager()
 

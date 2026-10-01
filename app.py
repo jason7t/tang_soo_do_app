@@ -2,7 +2,6 @@ from datetime import date, datetime, timedelta
 import database
 import pandas as pd
 import streamlit as st
-import extra_streamlit_components as stx
 
 database.init_database()
 
@@ -231,172 +230,225 @@ with tab_leden:
 
   if not leden:
     st.info("Geen leden gevonden die voldoen aan de zoektermen.")
+  else:
+    # --- WERKEND VINKJES & GROEP-SYSTEEM ---
+    st.markdown("##### ⚡ Groep-acties & Selecteren")
 
-  for lid in leden:
-    lid_id = lid["id"]
-    naam = lid["naam"]
-    geboortedatum_iso = lid["geboortedatum"]
-    geboortedatum_nl = naar_dd_mm_jjjj(geboortedatum_iso)
-    leeftijd = lid["leeftijd"]
-    band = lid["band"]
-    examendatum_iso = lid["examendatum"]
-    examendatum_nl = naar_dd_mm_jjjj(examendatum_iso)
-    notitie = lid["notitie"]
-    lid_lesuren = lid["lesuren"]
+    # Master checkbox om alles in één keer aan/uit te vinken
+    selecteer_alles = st.checkbox("Selecteer alle weergegeven leden", key="master_select")
 
-    col1, col2, col3, col4, col5, col6 = st.columns(
-        [1.8, 0.8, 1.5, 2.2, 1, 0.5]
-    )
-    col1.write(f"**{naam}**")
-    col2.write(f"Leeftijd: {leeftijd} jr")
-    col3.write(f"Band: {band}")
+    # Synchroniseer de master checkbox met alle individuele vinkjes als hij verandert
+    if "prev_master_select" not in st.session_state:
+        st.session_state.prev_master_select = False
 
-    wachttijd = bereken_wachttijd(band, examendatum_iso)
-    if wachttijd:
-      if wachttijd["klaar"]:
-        col4.markdown(
-            f"⏱️ <span style='color:green; font-weight:bold;'>🟢 Klaar! ({wachttijd['verstreken']}/{wachttijd['vereist']} jr)</span>",
-            unsafe_allow_html=True,
-        )
-      else:
-        col4.markdown(
-            f"⏱️ <span style='color:red; font-weight:bold;'>🔴 Wachttijd: {wachttijd['verstreken']}/{wachttijd['vereist']} jr</span>",
-            unsafe_allow_html=True,
-        )
-    else:
-      lesuren_tekst = ", ".join([f"{lu[1]} ({lu[2]})" for lu in lid_lesuren])
-      col4.write(
-          f"⏱️ {lesuren_tekst if lesuren_tekst else 'Geen lesuur'}"
+    if selecteer_alles != st.session_state.prev_master_select:
+        st.session_state.prev_master_select = selecteer_alles
+        for lid in leden:
+            st.session_state[f"sel_{lid['id']}"] = selecteer_alles
+        st.rerun()
+
+    geselecteerde_Ids = []
+
+    st.markdown("---")
+
+    # Weergave van de ledenlijst met werkende vinkjes per rij
+    for lid in leden:
+      lid_id = lid["id"]
+      naam = lid["naam"]
+      geboortedatum_iso = lid["geboortedatum"]
+      geboortedatum_nl = naar_dd_mm_jjjj(geboortedatum_iso)
+      leeftijd = lid["leeftijd"]
+      band = lid["band"]
+      examendatum_iso = lid["examendatum"]
+      examendatum_nl = naar_dd_mm_jjjj(examendatum_iso)
+      notitie = lid["notitie"]
+      lid_lesuren = lid["lesuren"]
+
+      col1, col2, col3, col4, col5, col6, col7 = st.columns(
+          [0.4, 1.6, 0.7, 1.4, 2.0, 0.8, 0.4]
       )
+      
+      with col1:
+        # Individueel vinkje gekoppeld aan session_state
+        is_checked = st.checkbox("", key=f"sel_{lid_id}", label_visibility="collapsed")
+        if is_checked:
+          geselecteerde_Ids.append(lid_id)
 
-    with col5:
-      if st.button("Geslaagd!", key=f"g_{lid_id}"):
-        vandaag_iso = date.today().strftime("%Y-%m-%d")
-        gelukt, nw_band = database.behaal_examen(lid_id, band, vandaag_iso)
-        if gelukt:
-          st.balloons()
-          st.toast(
-              f"🎉 Geweldig! {naam} is gepromoveerd naar {nw_band}!", icon="🥋"
+      col2.write(f"**{naam}**")
+      col3.write(f"{leeftijd} jr")
+      col4.write(f"Band: {band}")
+
+      wachttijd = bereken_wachttijd(band, examendatum_iso)
+      if wachttijd:
+        if wachttijd["klaar"]:
+          col5.markdown(
+              f"⏱️ <span style='color:green; font-weight:bold;'>🟢 Klaar!</span>",
+              unsafe_allow_html=True,
           )
-          # Kleine pauze zodat de ballonnen en toast zichtbaar zijn voor de pagina herlaadt
-          import time
+        else:
+          col5.markdown(
+              f"⏱️ <span style='color:red; font-weight:bold;'>🔴 Wachttijd</span>",
+              unsafe_allow_html=True,
+          )
+      else:
+        lesuren_tekst = ", ".join([f"{lu[1]}" for lu in lid_lesuren])
+        col5.write(f"⏱️ {lesuren_tekst if lesuren_tekst else 'Geen les'}")
 
+      with col6:
+        if st.button("Geslaagd!", key=f"g_{lid_id}"):
+          vandaag_iso = date.today().strftime("%Y-%m-%d")
+          gelukt, nw_band = database.behaal_examen(lid_id, band, vandaag_iso)
+          if gelukt:
+            st.balloons()
+            st.toast(f"🎉 Geweldig! {naam} is gepromoveerd naar {nw_band}!", icon="🥋")
+            import time
+            time.sleep(1.2)
+            st.rerun()
+
+      with col7:
+        if st.button("❌", key=f"v_{lid_id}"):
+          database.verwijder_lid(lid_id)
+          st.rerun()
+
+      if notitie:
+        st.info(f"📝 **Notitie:** {notitie}")
+
+      # Tijdlijn & Archief beheren (optioneel inklapbaar)
+      with st.expander(f"📜 Tijdlijn & Archief beheren van {naam}"):
+        historie = database.haal_historie_op(lid_id)
+        if not historie:
+          st.write("Nog geen examenhistorie bekend.")
+        else:
+          st.write("Hier zie je de tijdlijn. Je kunt stappen aanpassen of wissen:")
+          for h_id, h_band, h_datum_iso in historie:
+            h_datum_nl = naar_dd_mm_jjjj(h_datum_iso)
+            col_h1, col_h2, col_h3 = st.columns([3, 2, 1])
+            col_h1.write(f"🥋 **{h_band}** (Datum: {h_datum_nl})")
+
+            with col_h2:
+              with st.popover(f"✏️ Bewerk stap"):
+                with st.form(key=f"edit_hist_{h_id}"):
+                  nw_h_band = st.selectbox(
+                      "Band",
+                      database.GUP_VOLGORDE,
+                      index=(
+                          database.GUP_VOLGORDE.index(h_band.lower())
+                          if h_band.lower() in database.GUP_VOLGORDE
+                          else 0
+                      ),
+                      key=f"sb_h_band_{h_id}",
+                  )
+                  nw_h_datum_nl = st.text_input(
+                      "Examendatum (DD-MM-JJJJ)",
+                      value=h_datum_nl,
+                      key=f"dt_h_{h_id}",
+                  )
+
+                  if st.form_submit_button("Stap opslaan"):
+                    iso_check = naar_jjjj_mm_dd(nw_h_datum_nl)
+                    if not iso_check:
+                      st.error("Gebruik formaat DD-MM-JJJJ")
+                    else:
+                      database.update_historie_item(h_id, nw_h_band, iso_check)
+                      st.success("Stap aangepast!")
+                      st.rerun()
+
+            with col_h3:
+              if st.button("❌", key=f"del_hist_{h_id}", help="Verwijder stap"):
+                database.verwijder_historie_item(h_id)
+                st.warning("Stap verwijderd.")
+                st.rerun()
+
+      # Bewerken scherm lid
+      with st.expander(f"✏️ Bewerk gegevens van {naam}"):
+        with st.form(key=f"edit_form_{lid_id}"):
+          nw_naam = st.text_input("Naam", value=naam)
+          nw_geboortedatum_nl = st.text_input(
+              "Geboortedatum (DD-MM-JJJJ)", value=geboortedatum_nl
+          )
+
+          try:
+            b_idx = database.GUP_VOLGORDE.index(band.lower())
+          except ValueError:
+            b_idx = 0
+          nw_band = st.selectbox("Band", database.GUP_VOLGORDE, index=b_idx)
+
+          nw_examendatum_nl = st.text_input(
+              "Laatste Examendatum (DD-MM-JJJJ)", value=examendatum_nl
+          )
+
+          nw_notitie = st.text_area(
+              "Notities / Feedback",
+              value=notitie,
+              placeholder="Voeg hier feedback toe...",
+          )
+
+          st.write("⏱️ **Selecteer lesuren:**")
+          huidige_ids = [l[0] for l in lid_lesuren]
+          gekozen_ids_edit = []
+          for lu in alle_lesuren:
+            lu_id, omschrijving, leraar = lu
+            is_aan = lu_id in huidige_ids
+            if st.checkbox(
+                f"{omschrijving} — Leraar: {leraar}",
+                value=is_aan,
+                key=f"chk_edit_{lid_id}_{lu_id}",
+            ):
+              gekozen_ids_edit.append(lu_id)
+
+          if st.form_submit_button("Opslaan"):
+            geldig, resultaat_geb = valideer_en_parse_datum(nw_geboortedatum_nl)
+            geldig_ex, resultaat_ex = valideer_en_parse_datum(nw_examendatum_nl)
+
+            if not geldig:
+              st.error(f"Geboortedatum fout: {resultaat_geb}")
+            elif not geldig_ex:
+              st.error(f"Examendatum fout: {resultaat_ex}")
+            else:
+              database.update_lid(
+                  lid_id,
+                  nw_naam,
+                  resultaat_geb,
+                  nw_band,
+                  resultaat_ex,
+                  nw_notitie,
+                  gekozen_ids_edit,
+              )
+              st.success("Aangepast!")
+              st.rerun()
+
+      st.divider()
+
+    # Uitvoeren van groep-acties als er leden zijn geselecteerd
+    if geselecteerde_Ids:
+      st.markdown("---")
+      st.info(f"💡 **{len(geselecteerde_Ids)} leden geselecteerd.** Kies een actie hieronder:")
+      
+      col_act1, col_act2 = st.columns(2)
+      with col_act1:
+        if st.button("🚀 Laat geselecteerde leden slagen!", type="primary"):
+          vandaag_iso = date.today().strftime("%Y-%m-%d")
+          aantal_geslaagd = 0
+          for l_id in geselecteerde_Ids:
+            huidig_lid_info = next((item for item in leden if item["id"] == l_id), None)
+            if huidig_lid_info:
+              database.behaal_examen(l_id, huidig_lid_info["band"], vandaag_iso)
+              aantal_geslaagd += 1
+          
+          st.balloons()
+          st.success(f"🎉 {aantal_geslaagd} leden zijn succesvol laten slagen en bijgewerkt in het archief!")
+          import time
           time.sleep(1.5)
           st.rerun()
 
-    with col6:
-      if st.button("❌", key=f"v_{lid_id}"):
-        database.verwijder_lid(lid_id)
-        st.rerun()
-
-    if notitie:
-      st.info(f"📝 **Notitie:** {notitie}")
-
-    # Tijdlijn & Archief beheren
-    with st.expander(f"📜 Tijdlijn & Archief beheren van {naam}"):
-      historie = database.haal_historie_op(lid_id)
-      if not historie:
-        st.write("Nog geen examenhistorie bekend.")
-      else:
-        st.write("Hier zie je de tijdlijn. Je kunt stappen aanpassen of wissen:")
-        for h_id, h_band, h_datum_iso in historie:
-          h_datum_nl = naar_dd_mm_jjjj(h_datum_iso)
-          col_h1, col_h2, col_h3 = st.columns([3, 2, 1])
-          col_h1.write(f"🥋 **{h_band}** (Datum: {h_datum_nl})")
-
-          with col_h2:
-            with st.popover(f"✏️ Bewerk stap"):
-              with st.form(key=f"edit_hist_{h_id}"):
-                nw_h_band = st.selectbox(
-                    "Band",
-                    database.GUP_VOLGORDE,
-                    index=(
-                        database.GUP_VOLGORDE.index(h_band.lower())
-                        if h_band.lower() in database.GUP_VOLGORDE
-                        else 0
-                    ),
-                    key=f"sb_h_band_{h_id}",
-                )
-                nw_h_datum_nl = st.text_input(
-                    "Examendatum (DD-MM-JJJJ)",
-                    value=h_datum_nl,
-                    key=f"dt_h_{h_id}",
-                )
-
-                if st.form_submit_button("Stap opslaan"):
-                  iso_check = naar_jjjj_mm_dd(nw_h_datum_nl)
-                  if not iso_check:
-                    st.error("Gebruik formaat DD-MM-JJJJ")
-                  else:
-                    database.update_historie_item(h_id, nw_h_band, iso_check)
-                    st.success("Stap aangepast!")
-                    st.rerun()
-
-          with col_h3:
-            if st.button("❌", key=f"del_hist_{h_id}", help="Verwijder stap"):
-              database.verwijder_historie_item(h_id)
-              st.warning("Stap verwijderd.")
-              st.rerun()
-
-    # Bewerken scherm lid
-    with st.expander(f"✏️ Bewerk gegevens van {naam}"):
-      with st.form(key=f"edit_form_{lid_id}"):
-        nw_naam = st.text_input("Naam", value=naam)
-        nw_geboortedatum_nl = st.text_input(
-            "Geboortedatum (DD-MM-JJJJ)", value=geboortedatum_nl
-        )
-
-        try:
-          b_idx = database.GUP_VOLGORDE.index(band.lower())
-        except ValueError:
-          b_idx = 0
-        nw_band = st.selectbox("Band", database.GUP_VOLGORDE, index=b_idx)
-
-        nw_examendatum_nl = st.text_input(
-            "Laatste Examendatum (DD-MM-JJJJ)", value=examendatum_nl
-        )
-
-        nw_notitie = st.text_area(
-            "Notities / Feedback",
-            value=notitie,
-            placeholder="Voeg hier feedback toe...",
-        )
-
-        st.write("⏱️ **Selecteer lesuren:**")
-        huidige_ids = [l[0] for l in lid_lesuren]
-        gekozen_ids_edit = []
-        for lu in alle_lesuren:
-          lu_id, omschrijving, leraar = lu
-          is_aan = lu_id in huidige_ids
-          if st.checkbox(
-              f"{omschrijving} — Leraar: {leraar}",
-              value=is_aan,
-              key=f"chk_edit_{lid_id}_{lu_id}",
-          ):
-            gekozen_ids_edit.append(lu_id)
-
-        if st.form_submit_button("Opslaan"):
-          geldig, resultaat_geb = valideer_en_parse_datum(nw_geboortedatum_nl)
-          geldig_ex, resultaat_ex = valideer_en_parse_datum(nw_examendatum_nl)
-
-          if not geldig:
-            st.error(f"Geboortedatum fout: {resultaat_geb}")
-          elif not geldig_ex:
-            st.error(f"Examendatum fout: {resultaat_ex}")
-          else:
-            database.update_lid(
-                lid_id,
-                nw_naam,
-                resultaat_geb,
-                nw_band,
-                resultaat_ex,
-                nw_notitie,
-                gekozen_ids_edit,
-            )
-            st.success("Aangepast!")
-            st.rerun()
-
-    st.divider()
+      with col_act2:
+        if st.button("🗑️ Verwijder geselecteerde leden", type="secondary"):
+          for l_id in geselecteerde_Ids:
+            database.verwijder_lid(l_id)
+          st.warning(f"{len(geselecteerde_Ids)} leden zijn verwijderd uit het systeem.")
+          import time
+          time.sleep(1.2)
+          st.rerun()
 
 # --- SIDEBAR: NIEUW LID TOEVOEGEN ---
 st.sidebar.header("➕ Nieuw Lid Toevoegen")
@@ -470,15 +522,13 @@ with tab_agenda:
     st.subheader("📅 Lesagenda & Vervangingen")
     st.write("Hier kun je zien welke lessen er aankomen, of er leraren afwezig zijn, en wie een les kan overnemen.")
 
-    # Datumkiezer voor de agenda (standaard vandaag of komende dagen)
     col_d1, col_d2 = st.columns([2, 2])
     with col_d1:
         gekozen_datum = st.date_input("Selecteer datum", value=date.today())
     
     gekozen_datum_str = gekozen_datum.strftime("%d-%m-%Y")
-    dag_van_week = gekozen_datum.strftime("%A") # Bijv. Monday, Wednesday, Friday
+    dag_van_week = gekozen_datum.strftime("%A")
     
-    # Vertaling dag naar Nederlands voor de visuele check
     dagen_nl = {
         "Monday": "Maandag",
         "Wednesday": "Woensdag",
@@ -491,7 +541,6 @@ with tab_agenda:
     dag_nl_tekst = dagen_nl.get(dag_van_week, dag_van_week)
     st.markdown(f"### Lessen op {dag_nl_tekst} ({gekozen_datum.strftime('%d-%m-%Y')})")
 
-    # Filter de vaste lesuren op basis van de dag in de omschrijving
     relevante_lessen = []
     for lu in alle_lesuren:
         lu_id, omschrijving, leraar = lu
@@ -503,8 +552,6 @@ with tab_agenda:
     else:
         for lu in relevante_lessen:
             lu_id, omschrijving, vaste_leraar = lu
-            
-            # Haal eventuele vervanging op voor deze datum
             vervanging = database.haal_vervanging_op(lu_id, gekozen_datum_str)
             
             status = "Normaal"
@@ -518,7 +565,7 @@ with tab_agenda:
                 
                 with c_a1:
                     st.write(f"**{omschrijving}**")
-                    st.caption(id_tekst := f"Vaste leraar: {vaste_leraar}")
+                    st.caption(f"Vaste leraar: {vaste_leraar}")
 
                 with c_a2:
                     if status == "Normaal" or not status:
@@ -529,17 +576,14 @@ with tab_agenda:
                         st.markdown(f"🟡 **Overgenomen door {vervanger}**")
 
                 with c_a3:
-                    # Popover of knoppen om status aan te passen
                     with st.popover("⚙️ Beheer vervanging"):
                         st.write(f"**{omschrijving}**")
                         
-                        # Optie 1: Vaste leraar kan aangeven dat hij afwezig is
                         if st.button("🔴 Ik ben afwezig (zoek vervanger)", key=f"afw_{lu_id}_{gekozen_datum_str}"):
                             database.sla_vervanging_op(lu_id, gekozen_datum_str, "Gezocht", "")
                             st.toast("Status gewijzigd naar: Vervanger gezocht!", icon="🚨")
                             st.rerun()
                             
-                        # Optie 2: Collega kan invallen
                         ingevallen_naam = st.selectbox("Collega die invalt:", ["Kies leraar..."] + alle_leraren, key=f"inv_{lu_id}_{gekozen_datum_str}")
                         if ingevallen_naam != "Kies leraar...":
                             if st.button("🟢 Neem deze les over", key=f"overn_{lu_id}_{gekozen_datum_str}"):
@@ -547,7 +591,6 @@ with tab_agenda:
                                 st.toast(f"Les overgenomen door {ingevallen_naam}!", icon="👍")
                                 st.rerun()
 
-                        # Optie 3: Terugzetten naar normaal
                         if status != "Normaal":
                             if st.button("🔄 Zet terug naar normaal", key=f"herstel_{lu_id}_{gekozen_datum_str}"):
                                 database.sla_vervanging_op(lu_id, gekozen_datum_str, "Normaal", "")
@@ -563,13 +606,11 @@ with tab_excel:
       " legenda hieronder."
   )
 
-  # Legenda en Voorbeeld in een inklapmenu (inclusief actuele leraren)
   with st.expander(
       "💡 Klik hier voor de Lesuur-legenda, Excel-voorbeeld en kolomuitleg"
   ):
     st.markdown("### 📋 Lesuur-legenda (Gebruik deze nummers in Excel):")
 
-    # Dynamische legenda genereren op basis van de database (inclusief actuele leraren!)
     legenda_md = ""
     for lu in alle_lesuren:
       lu_id, omschrijving, leraar = lu
@@ -592,15 +633,6 @@ with tab_excel:
     })
 
     st.dataframe(voorbeeld_data, hide_index=True)
-
-    st.caption(
-        "📌 **Belangrijke tips:**\n"
-        "1. Kolomnamen exact overnemen in kleine letters (`naam`,"
-        " `geboortedatum`, etc.).\n"
-        "2. Datums in notatie **`DD-MM-JJJJ`** (bijv. `15-06-1995`).\n"
-        "3. In de kolom `lesuren` noteer je de nummers uit de legenda,"
-        " gescheiden door een komma (bijv. `1, 2`)."
-    )
 
   st.divider()
 
@@ -625,8 +657,7 @@ with tab_excel:
     if ontbrekend:
       st.error(
           "❌ Het Excel-bestand mist verplichte kolommen: "
-          f"**{', '.join(ontbrekend)}**. Controleer de kolomnamen op de eerste"
-          " rij (moeten kleine letters zijn)."
+          f"**{', '.join(ontbrekend)}**."
       )
     else:
       fouten = []
@@ -634,11 +665,6 @@ with tab_excel:
 
       for idx, row in df.iterrows():
         naam_val = str(row["naam"]) if pd.notna(row["naam"]) else "Onbekend"
-        geb_raw = (
-            str(row["geboortedatum"]).split(" ")[0]
-            if pd.notna(row["geboortedatum"])
-            else ""
-        )
         geb_val = row.get("geboortedatum")
         if pd.isna(geb_val) or geb_val is None:
             geb_raw = ""
@@ -659,8 +685,7 @@ with tab_excel:
         )
         if band_val not in database.GUP_VOLGORDE:
           fouten.append(
-              f"Rij {idx+2} ({naam_val}) - Band: Onbekende bandnaam"
-              f" '{row['band']}'."
+              f"Rij {idx+2} ({naam_val}) - Band: Onbekende bandnaam '{row['band']}'."
           )
           continue
 
@@ -709,12 +734,11 @@ with tab_excel:
       if fouten:
         st.warning(
             f"⚠️ Er zijn {aantal_gelukt} leden succesvol geïmporteerd, maar er"
-            " zijn ook fouten gevonden in specifieke rijen:\n"
+            " zijn ook fouten gevonden:\n"
             + "\n".join(f"- {f}" for f in fouten)
         )
       else:
         st.balloons()
         st.success(
-            f"🎉 Gelukt! Alle {aantal_gelukt} leden zijn succesvol geïmporteerd"
-            " vanuit het Excel-bestand."
+            f"🎉 Gelukt! Alle {aantal_gelukt} leden zijn succesvol geïmporteerd."
         )

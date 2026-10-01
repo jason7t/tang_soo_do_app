@@ -6,43 +6,8 @@ import extra_streamlit_components as stx
 
 database.init_database()
 
-# ALTIJD ALS EERSTE: Pagina configuratie
+# Pagina configuratie (dit moet altijd als allererste staan)
 st.set_page_config(page_title="Tang Soo Do Beheer", layout="wide")
-
-# --- SIMPELE INLOGBEVEILIGING MET COOKIES ---
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
-
-# Controleer of er al een cookie is opgeslagen
-ingelogd_cookie = cookie_manager.get(cookie="tang_soo_do_login")
-
-if "ingelogd" not in st.session_state:
-    if ingelogd_cookie == "wel_ingelogd":
-        st.session_state.ingelogd = True
-    else:
-        st.session_state.ingelogd = False
-
-if not st.session_state.ingelogd:
-    st.title("🔒 Tang Soo Do Beheer — Inloggen")
-    gebruikersnaam = st.text_input("Gebruikersnaam")
-    wachtwoord = st.text_input("Wachtwoord", type="password")
-
-    if st.button("Inloggen"):
-        if gebruikersnaam == "beheerder" and wachtwoord == "tangSOOdoMEY2026!":
-            st.session_state.ingelogd = True
-            
-            # Sla een cookie op die 1 uur geldig blijft
-            verval_tijd = datetime.now() + timedelta(hours=1)
-            cookie_manager.set("tang_soo_do_login", "wel_ingelogd", expires_at=verval_tijd)
-            
-            st.success("Succesvol ingelogd!")
-            st.rerun()
-        else:
-            st.error("Onjuiste gebruikersnaam of wachtwoord.")
-    
-    st.stop()  # Stopt de app hieronder zodat niemand erbij kan zonder inloggen
 
 st.markdown(
     """

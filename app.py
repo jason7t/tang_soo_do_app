@@ -43,6 +43,7 @@ alle_leraren = list(
 
 DAN_WACHTTIJDEN = {
     "rood/zwart": 1,
+    "1e dan": 2,
     "1ste dan": 2,
     "2e dan": 3,
     "3e dan": 4,
@@ -80,7 +81,7 @@ def naar_jjjj_mm_dd(datum_str):
       return None
 
 
-def valideer_en_parse_datum(datum_str):
+def valideer_en_parse_datum(datum_str, is_geboortedatum=False):
   ISO_datum = naar_jjjj_mm_dd(datum_str)
   if not ISO_datum:
     return (
@@ -92,8 +93,11 @@ def valideer_en_parse_datum(datum_str):
     parsed_date = datetime.strptime(ISO_datum, "%Y-%m-%d").date()
     vandaag = date.today()
     if parsed_date > vandaag:
-      return False, "Geboortedatum kan niet in de toekomst liggen."
-    if parsed_date.year < 1900:
+      if is_geboortedatum:
+        return False, "Geboortedatum kan niet in de toekomst liggen."
+      else:
+        return False, "Examendatum kan niet in de toekomst liggen."
+    if is_geboortedatum and parsed_date.year < 1900:
       return False, "Geboortejaar kan niet voor 1900 liggen."
     return True, ISO_datum
   except ValueError:
@@ -111,31 +115,67 @@ def bereken_leeftijd(geboortedatum_iso):
         - geb_datum.year
         - ((vandaag.month, vandaag.day) < (geb_datum.month, geb_datum.day))
     )
-    return leeftijd
+    return max(0, leeftijd)
   except ValueError:
     return 0
 
 
 def bereken_wachttijd(band, examendatum_str):
-  band_clean = band.strip().lower()
+  if not band or not examendatum_str:
+    return None
+    
+  band_clean = str(band).strip().lower()
   if band_clean not in DAN_WACHTTIJDEN:
     return None
+    
   vereiste_jaren = DAN_WACHTTIJDEN[band_clean]
+  
   try:
-    examen_datum = datetime.strptime(
-        examendatum_str.split(" ")[0], "%Y-%m-%d"
-    ).date()
-  except ValueError:
+    if isinstance(examendatum_str, str):
+      examen_datum = datetime.strptime(examendatum_str.split(" ")[0], "%Y-%m-%d").date()
+    elif isinstance(examendatum_str, datetime):
+      examen_datum = examendatum_str.date()
+    elif isinstance(examendatum_str, date):
+      examen_datum = examendatum_str
+    else:
+      return None
+  except Exception:
     return None
+    
   vandaag = date.today()
   verschil_dagen = (vandaag - examen_datum).days
-  verstreken_jaren = round(verschil_dagen / 365.25, 1)
+  verstreken_jaren = max(0.0, round(verschil_dagen / 365.25, 1))
   klaar = verstreken_jaren >= vereiste_jaren
+  
   return {
       "vereist": vereiste_jaren,
       "verstreken": verstreken_jaren,
       "klaar": klaar,
   }
+
+
+def synchroniseer_hoofdtabel_met_historie(lid_id):
+  """Zorgt ervoor dat de band en examendatum in de hoofdtabel altijd overeenkomen met de laatste stap in de tijdlijn."""
+  historie = database.haal_historie_op(lid_id)
+  if historie:
+    historie_gesorteerd = sorted(historie, key=lambda x: x[2], reverse=True)
+    laatste_stap = historie_gesorteerd[0]
+    laatste_band = laatste_stap[1]
+    laatste_datum = laatste_stap[2]
+    
+    leden = database.haal_leden_gefilterd()
+    huidig_lid = next((l for l in leden if l["id"] == lid_id), None)
+    if huidig_lid:
+      huidige_lesuur_ids = [lu[0] for lu in huidig_lid["lesuren"]]
+      database.update_lid(
+          lid_id,
+          huidig_lid["naam"],
+          huidig_lid["geboortedatum"],
+          laatste_band,
+          laatste_datum,
+          huidig_lid["notitie"],
+          huidige_lesuur_ids
+      )
 
 
 tab_leden, tab_leraren, tab_agenda, tab_excel = st.tabs(
@@ -231,13 +271,10 @@ with tab_leden:
   if not leden:
     st.info("Geen leden gevonden die voldoen aan de zoektermen.")
   else:
-    # --- WERKEND VINKJES & GROEP-SYSTEEM ---
     st.markdown("##### ⚡ Groep-acties & Selecteren")
 
-    # Master checkbox om alles in één keer aan/uit te vinken
     selecteer_alles = st.checkbox("Selecteer alle weergegeven leden", key="master_select")
 
-    # Synchroniseer de master checkbox met alle individuele vinkjes als hij verandert
     if "prev_master_select" not in st.session_state:
         st.session_state.prev_master_select = False
 
@@ -251,7 +288,6 @@ with tab_leden:
 
     st.markdown("---")
 
-    # Weergave van de ledenlijst met werkende vinkjes per rij
     for lid in leden:
       lid_id = lid["id"]
       naam = lid["naam"]
@@ -269,7 +305,6 @@ with tab_leden:
       )
       
       with col1:
-        # Individueel vinkje gekoppeld aan session_state
         is_checked = st.checkbox("", key=f"sel_{lid_id}", label_visibility="collapsed")
         if is_checked:
           geselecteerde_Ids.append(lid_id)
@@ -282,12 +317,12 @@ with tab_leden:
       if wachttijd:
         if wachttijd["klaar"]:
           col5.markdown(
-              f"⏱️ <span style='color:green; font-weight:bold;'>🟢 Klaar!</span>",
+              f"⏱️ <span style='color:green; font-weight:bold;'>🟢 Klaar! ({wachttijd['verstreken']}/{wachttijd['vereist']} jr)</span>",
               unsafe_allow_html=True,
           )
         else:
           col5.markdown(
-              f"⏱️ <span style='color:red; font-weight:bold;'>🔴 Wachttijd</span>",
+              f"⏱️ <span style='color:red; font-weight:bold;'>🔴 Wachttijd: {wachttijd['verstreken']}/{wachttijd['vereist']} jr</span>",
               unsafe_allow_html=True,
           )
       else:
@@ -313,7 +348,7 @@ with tab_leden:
       if notitie:
         st.info(f"📝 **Notitie:** {notitie}")
 
-      # Tijdlijn & Archief beheren (optioneel inklapbaar)
+      # Tijdlijn & Archief beheren
       with st.expander(f"📜 Tijdlijn & Archief beheren van {naam}"):
         historie = database.haal_historie_op(lid_id)
         if not historie:
@@ -345,18 +380,20 @@ with tab_leden:
                   )
 
                   if st.form_submit_button("Stap opslaan"):
-                    iso_check = naar_jjjj_mm_dd(nw_h_datum_nl)
-                    if not iso_check:
-                      st.error("Gebruik formaat DD-MM-JJJJ")
+                    geldig_ex, resultaat_ex = valideer_en_parse_datum(nw_h_datum_nl, is_geboortedatum=False)
+                    if not geldig_ex:
+                      st.error(f"Fout: {resultaat_ex}")
                     else:
-                      database.update_historie_item(h_id, nw_h_band, iso_check)
-                      st.success("Stap aangepast!")
+                      database.update_historie_item(h_id, nw_h_band, resultaat_ex)
+                      synchroniseer_hoofdtabel_met_historie(lid_id)
+                      st.success("Stap aangepast en hoofdtabel gesynchroniseerd!")
                       st.rerun()
 
             with col_h3:
               if st.button("❌", key=f"del_hist_{h_id}", help="Verwijder stap"):
                 database.verwijder_historie_item(h_id)
-                st.warning("Stap verwijderd.")
+                synchroniseer_hoofdtabel_met_historie(lid_id)
+                st.warning("Stap verwijderd en hoofdtabel bijgewerkt.")
                 st.rerun()
 
       # Bewerken scherm lid
@@ -397,10 +434,10 @@ with tab_leden:
               gekozen_ids_edit.append(lu_id)
 
           if st.form_submit_button("Opslaan"):
-            geldig, resultaat_geb = valideer_en_parse_datum(nw_geboortedatum_nl)
-            geldig_ex, resultaat_ex = valideer_en_parse_datum(nw_examendatum_nl)
+            geldig_geb, resultaat_geb = valideer_en_parse_datum(nw_geboortedatum_nl, is_geboortedatum=True)
+            geldig_ex, resultaat_ex = valideer_en_parse_datum(nw_examendatum_nl, is_geboortedatum=False)
 
-            if not geldig:
+            if not geldig_geb:
               st.error(f"Geboortedatum fout: {resultaat_geb}")
             elif not geldig_ex:
               st.error(f"Examendatum fout: {resultaat_ex}")
@@ -414,12 +451,18 @@ with tab_leden:
                   nw_notitie,
                   gekozen_ids_edit,
               )
-              st.success("Aangepast!")
+              
+              historie = database.haal_historie_op(lid_id)
+              if historie:
+                historie_gesorteerd = sorted(historie, key=lambda x: x[2], reverse=True)
+                meest_recente_h_id, _, _ = historie_gesorteerd[0]
+                database.update_historie_item(meest_recente_h_id, nw_band, resultaat_ex)
+
+              st.success("Gegevens en tijdlijn succesvol gesynchroniseerd!")
               st.rerun()
 
       st.divider()
 
-    # Uitvoeren van groep-acties als er leden zijn geselecteerd
     if geselecteerde_Ids:
       st.markdown("---")
       st.info(f"💡 **{len(geselecteerde_Ids)} leden geselecteerd.** Kies een actie hieronder:")
@@ -482,10 +525,10 @@ st.sidebar.write("")
 
 if st.sidebar.button("Lid Toevoegen", type="primary"):
   if n_naam:
-    geldig, resultaat_geb = valideer_en_parse_datum(n_geboortedatum_nl)
-    geldig_ex, resultaat_ex = valideer_en_parse_datum(n_datum_nl)
+    geldig_geb, resultaat_geb = valideer_en_parse_datum(n_geboortedatum_nl, is_geboortedatum=True)
+    geldig_ex, resultaat_ex = valideer_en_parse_datum(n_datum_nl, is_geboortedatum=False)
 
-    if not geldig:
+    if not geldig_geb:
       st.sidebar.error(f"Geboortedatum fout: {resultaat_geb}")
     elif not geldig_ex:
       st.sidebar.error(f"Examendatum fout: {resultaat_ex}")
@@ -673,8 +716,8 @@ with tab_excel:
         else:
             geb_raw = str(geb_val)
 
-        geldig, resultaat_geb = valideer_en_parse_datum(geb_raw)
-        if not geldig:
+        geldig_geb, resultaat_geb = valideer_en_parse_datum(geb_raw, is_geboortedatum=True)
+        if not geldig_geb:
           fouten.append(f"Rij {idx+2} ({naam_val}) - Geboortedatum: {resultaat_geb}")
           continue
 
@@ -697,7 +740,7 @@ with tab_excel:
         if isinstance(row.get("examendatum"), datetime):
           datum_raw = row["examendatum"].strftime("%d-%m-%Y")
 
-        geldig_ex, resultaat_ex = valideer_en_parse_datum(datum_raw)
+        geldig_ex, resultaat_ex = valideer_en_parse_datum(datum_raw, is_geboortedatum=False)
         if not geldig_ex:
           resultaat_ex = date.today().strftime("%Y-%m-%d")
 

@@ -35,7 +35,7 @@ st.markdown(
 st.title("🥋 Tang Soo Do Leden & Lesuren Beheer")
 
 # --- VERBORGEN DEVELOPER DASHBOARD SETUP (E-mailherkenning) ---
-huidige_gebruiker_email = "onbekend"
+huidige_gebruiker_email = "jason7mei@gmail.com"
 try:
     if hasattr(st, "user") and st.user and hasattr(st.user, "email"):
         huidige_gebruiker_email = st.user.email

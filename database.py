@@ -1,5 +1,6 @@
 from supabase import create_client, Client
 import streamlit as st
+from datetime import datetime
 
 # Maak verbinding met Supabase via de veilige secrets
 url: str = st.secrets["SUPABASE_URL"]
@@ -206,33 +207,27 @@ def sla_vervanging_op(lesuur_id, datum, status, vervanger_naam):
         }).execute()
 
 def init_audit_tabel():
-    """
-    Controleert of de audit_log tabel benaderbaar is. 
-    (Zorg dat je in Supabase een tabel genaamd 'audit_log' hebt aangemaakt 
-    met kolommen: id (int/uuid), email (text), actie (text), tijdstip (timestamp)).
-    """
+    """Controleert of de audit_log tabel benaderbaar is in Supabase."""
     try:
-        # Test of we de tabel kunnen bereiken
         supabase.table("audit_log").select("*", count="exact").limit(1).execute()
     except Exception as e:
         print(f"Let op bij init_audit_tabel: {e}")
 
-
 def log_activiteit(email, actie):
-    """Slaat een actie op van een gebruiker in de audit_log tabel van Supabase."""
+    """Slaat een actie op van een ingelogde gebruiker in Supabase."""
     try:
         data = {
-            "email": email,
-            "actie": actie,
-            "tijdstip": datetime.now().isoformat() # Zorg dat datetime geïmporteerd is in database.py
+            "email": str(email),
+            "actie": str(actie),
+            "tijdstip": datetime.now().isoformat()
         }
-        supabase.table("audit_log").insert(data).execute()
+        response = supabase.table("audit_log").insert(data).execute()
+        print("Log succesvol opgeslagen:", response) # Handig om te zien in je terminal/logs
     except Exception as e:
         print(f"Fout bij loggen van activiteit: {e}")
 
-
 def haal_audit_logs_op():
-    """Haalt de meest recente activiteiten op voor het Developer Dashboard."""
+    """Haalt de laatste 50 activiteiten op voor het Developer Dashboard."""
     try:
         response = supabase.table("audit_log").select("*").order("tijdstip", desc=True).limit(50).execute()
         return response.data if response.data else []

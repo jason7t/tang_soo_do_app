@@ -46,7 +46,7 @@ except Exception:
 
 # ALS LOKAAL TESTEN: Als Streamlit geen e-mail vindt (omdat je lokaal draait), 
 # kun je hem hier automatisch jouw e-mail laten gebruiken voor tests.
-if not huidige_gebruiker_email or huidige_gebruiker_email == "onbekend":
+#if not huidige_gebruiker_email or huidige_gebruiker_email == "onbekend":
     # Verwijder of commentarieer deze regel (#) uit als je wilt dat lokaal testen stopt
     huidige_gebruiker_email = "jason7mei@gmail.com"
 

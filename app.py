@@ -34,8 +34,8 @@ st.markdown(
 
 st.title("🥋 Tang Soo Do Leden & Lesuren Beheer")
 
-# --- VERBORGEN DEVELOPER DASHBOARD SETUP (E-mailherkenning) ---
-huidige_gebruiker_email = "jason7mei@gmail.com"
+# --- VERBORGEN DEVELOPER DASHBOARD SETUP (Slimme E-mailherkenning) ---
+huidige_gebruiker_email = ""
 try:
     if hasattr(st, "user") and st.user and hasattr(st.user, "email"):
         huidige_gebruiker_email = st.user.email
@@ -43,6 +43,12 @@ try:
         huidige_gebruiker_email = st.experimental_user.email
 except Exception:
     pass
+
+# ALS LOKAAL TESTEN: Als Streamlit geen e-mail vindt (omdat je lokaal draait), 
+# kun je hem hier automatisch jouw e-mail laten gebruiken voor tests.
+if not huidige_gebruiker_email or huidige_gebruiker_email == "onbekend":
+    # Verwijder of commentarieer deze regel (#) uit als je wilt dat lokaal testen stopt
+    huidige_gebruiker_email = "jason7mei@gmail.com"
 
 alle_lesuren = database.haal_lesuren_op()
 lesuur_mapping = {f"{l[1]} (Leraar: {l[2]})": l[0] for l in alle_lesuren}

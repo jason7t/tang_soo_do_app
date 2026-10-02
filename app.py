@@ -34,6 +34,16 @@ st.markdown(
 
 st.title("🥋 Tang Soo Do Leden & Lesuren Beheer")
 
+# --- VERBORGEN DEVELOPER DASHBOARD SETUP (E-mailherkenning) ---
+huidige_gebruiker_email = "onbekend"
+try:
+    if hasattr(st, "user") and st.user and hasattr(st.user, "email"):
+        huidige_gebruiker_email = st.user.email
+    elif hasattr(st, "experimental_user") and st.experimental_user and hasattr(st.experimental_user, "email"):
+        huidige_gebruiker_email = st.experimental_user.email
+except Exception:
+    pass
+
 alle_lesuren = database.haal_lesuren_op()
 lesuur_mapping = {f"{l[1]} (Leraar: {l[2]})": l[0] for l in alle_lesuren}
 lesuur_opties = list(lesuur_mapping.keys())
@@ -334,6 +344,7 @@ with tab_leden:
           vandaag_iso = date.today().strftime("%Y-%m-%d")
           gelukt, nw_band = database.behaal_examen(lid_id, band, vandaag_iso)
           if gelukt:
+            database.log_activiteit(huidige_gebruiker_email, f"Lid {naam} laten slagen voor {nw_band}")
             st.balloons()
             st.toast(f"🎉 Geweldig! {naam} is gepromoveerd naar {nw_band}!", icon="🥋")
             import time
@@ -342,6 +353,7 @@ with tab_leden:
 
       with col7:
         if st.button("❌", key=f"v_{lid_id}"):
+          database.log_activiteit(huidige_gebruiker_email, f"Lid {naam} verwijderd uit het systeem")
           database.verwijder_lid(lid_id)
           st.rerun()
 
@@ -386,6 +398,7 @@ with tab_leden:
                     else:
                       database.update_historie_item(h_id, nw_h_band, resultaat_ex)
                       synchroniseer_hoofdtabel_met_historie(lid_id)
+                      database.log_activiteit(huidige_gebruiker_email, f"Tijdlijn-stap aangepast voor {naam}")
                       st.success("Stap aangepast en hoofdtabel gesynchroniseerd!")
                       st.rerun()
 
@@ -393,6 +406,7 @@ with tab_leden:
               if st.button("❌", key=f"del_hist_{h_id}", help="Verwijder stap"):
                 database.verwijder_historie_item(h_id)
                 synchroniseer_hoofdtabel_met_historie(lid_id)
+                database.log_activiteit(huidige_gebruiker_email, f"Tijdlijn-stap verwijderd voor {naam}")
                 st.warning("Stap verwijderd en hoofdtabel bijgewerkt.")
                 st.rerun()
 
@@ -458,6 +472,7 @@ with tab_leden:
                 meest_recente_h_id, _, _ = historie_gesorteerd[0]
                 database.update_historie_item(meest_recente_h_id, nw_band, resultaat_ex)
 
+              database.log_activiteit(huidige_gebruiker_email, f"Gegevens en tijdlijn bijgewerkt voor {nw_naam}")
               st.success("Gegevens en tijdlijn succesvol gesynchroniseerd!")
               st.rerun()
 
@@ -478,6 +493,7 @@ with tab_leden:
               database.behaal_examen(l_id, huidig_lid_info["band"], vandaag_iso)
               aantal_geslaagd += 1
           
+          database.log_activiteit(huidige_gebruiker_email, f"Bulk actie: {aantal_geslaagd} leden laten slagen")
           st.balloons()
           st.success(f"🎉 {aantal_geslaagd} leden zijn succesvol laten slagen en bijgewerkt in het archief!")
           import time
@@ -488,6 +504,8 @@ with tab_leden:
         if st.button("🗑️ Verwijder geselecteerde leden", type="secondary"):
           for l_id in geselecteerde_Ids:
             database.verwijder_lid(l_id)
+          
+          database.log_activiteit(huidige_gebruiker_email, f"Bulk actie: {len(geselecteerde_Ids)} leden verwijderd")
           st.warning(f"{len(geselecteerde_Ids)} leden zijn verwijderd uit het systeem.")
           import time
           time.sleep(1.2)
@@ -536,25 +554,17 @@ if st.sidebar.button("Lid Toevoegen", type="primary"):
       database.voeg_lid_toe(
           n_naam, resultaat_geb, n_band, resultaat_ex, n_notitie, nieuwe_ids
       )
+      database.log_activiteit(huidige_gebruiker_email, f"Nieuw lid toegevoegd: {n_naam}")
       st.sidebar.success("Lid toegevoegd!")
       st.rerun()
   else:
     st.sidebar.error("Vul ten minste een naam in.")
 
-# --- VERBORGEN DEVELOPER DASHBOARD (Alleen voor jou) ---
-huidige_gebruiker_email = ""
-try:
-    if hasattr(st, "user") and st.user and hasattr(st.user, "email"):
-        huidige_gebruiker_email = st.user.email
-    elif hasattr(st, "experimental_user") and st.experimental_user and hasattr(st.experimental_user, "email"):
-        huidige_gebruiker_email = st.experimental_user.email
-except Exception:
-    pass
-
+# --- VERBORGEN DEVELOPER DASHBOARD (Alleen voor jouw e-mailadressen) ---
 DEVELOPER_EMAILS = ["jason7mei@gmail.com", "jason007t@outlook.com"]
 
 if huidige_gebruiker_email in DEVELOPER_EMAILS:
-    with st.sidebar.expander("🛠️ Developer Dashboard"):
+    with st.sidebar.expander("🛠️ Developer Dashboard (Geheim)"):
         st.success(f"Ingelogd als: {huidige_gebruiker_email}")
         
         st.markdown("### 📋 Recente Activiteiten")
@@ -583,6 +593,7 @@ with tab_leraren:
     )
     if c3.button("Opslaan", key=f"btn_ler_{lu_id}"):
       database.update_leraar_bij_lesuur(lu_id, nieuwe_leraar_naam)
+      database.log_activiteit(huidige_gebruiker_email, f"Leraar bijgewerkt voor {omschrijving} naar {nieuwe_leraar_naam}")
       st.success("Bijgewerkt!")
       st.rerun()
 
@@ -651,6 +662,7 @@ with tab_agenda:
                         
                         if st.button("🔴 Ik ben afwezig (zoek vervanger)", key=f"afw_{lu_id}_{gekozen_datum_str}"):
                             database.sla_vervanging_op(lu_id, gekozen_datum_str, "Gezocht", "")
+                            database.log_activiteit(huidige_gebruiker_email, f"Vervanger gezocht voor {omschrijving} op {gekozen_datum_str}")
                             st.toast("Status gewijzigd naar: Vervanger gezocht!", icon="🚨")
                             st.rerun()
                             
@@ -658,12 +670,14 @@ with tab_agenda:
                         if ingevallen_naam != "Kies leraar...":
                             if st.button("🟢 Neem deze les over", key=f"overn_{lu_id}_{gekozen_datum_str}"):
                                 database.sla_vervanging_op(lu_id, gekozen_datum_str, "Overgenomen", ingevallen_naam)
+                                database.log_activiteit(huidige_gebruiker_email, f"Les {omschrijving} op {gekozen_datum_str} overgenomen door {ingevallen_naam}")
                                 st.toast(f"Les overgenomen door {ingevallen_naam}!", icon="👍")
                                 st.rerun()
 
                         if status != "Normaal":
                             if st.button("🔄 Zet terug naar normaal", key=f"herstel_{lu_id}_{gekozen_datum_str}"):
                                 database.sla_vervanging_op(lu_id, gekozen_datum_str, "Normaal", "")
+                                database.log_activiteit(huidige_gebruiker_email, f"Les {omschrijving} op {gekozen_datum_str} hersteld naar normaal")
                                 st.toast("Les hersteld naar normaal rooster.", icon="🔄")
                                 st.rerun()
 
@@ -801,6 +815,9 @@ with tab_excel:
         )
         aantal_gelukt += 1
 
+      if aantal_gelukt > 0:
+        database.log_activiteit(huidige_gebruiker_email, f"Excel import uitgevoerd: {aantal_gelukt} leden geïmporteerd")
+
       if fouten:
         st.warning(
             f"⚠️ Er zijn {aantal_gelukt} leden succesvol geïmporteerd, maar er"
@@ -812,4 +829,3 @@ with tab_excel:
         st.success(
             f"🎉 Gelukt! Alle {aantal_gelukt} leden zijn succesvol geïmporteerd."
         )
-

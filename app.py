@@ -570,7 +570,7 @@ if st.sidebar.button("Lid Toevoegen", type="primary"):
 DEVELOPER_EMAILS = ["jason7mei@gmail.com", "jason007t@outlook.com"]
 
 if huidige_gebruiker_email in DEVELOPER_EMAILS:
-    with st.sidebar.expander("🛠️ Developer Dashboard (Geheim)"):
+    with st.sidebar.expander("🛠️ Developer Dashboard"):
         st.success(f"Ingelogd als: {huidige_gebruiker_email}")
         
         st.markdown("### 📋 Recente Activiteiten")

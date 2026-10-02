@@ -541,6 +541,33 @@ if st.sidebar.button("Lid Toevoegen", type="primary"):
   else:
     st.sidebar.error("Vul ten minste een naam in.")
 
+# --- VERBORGEN DEVELOPER DASHBOARD (Alleen voor jou) ---
+huidige_gebruiker_email = ""
+try:
+    if hasattr(st, "user") and st.user and hasattr(st.user, "email"):
+        huidige_gebruiker_email = st.user.email
+    elif hasattr(st, "experimental_user") and st.experimental_user and hasattr(st.experimental_user, "email"):
+        huidige_gebruiker_email = st.experimental_user.email
+except Exception:
+    pass
+
+DEVELOPER_EMAILS = ["jason7mei@gmail.com", "jason007t@outlook.com"]
+
+if huidige_gebruiker_email in DEVELOPER_EMAILS:
+    with st.sidebar.expander("🛠️ Developer Dashboard"):
+        st.success(f"Ingelogd als: {huidige_gebruiker_email}")
+        
+        st.markdown("### 📋 Recente Activiteiten")
+        logs = database.haal_audit_logs_op()
+        if logs:
+            for log in logs:
+                st.caption(f"🕒 {log['tijdstip'][:19]} | **{log['email']}**\n↳ {log['actie']}")
+        else:
+            st.info("Nog geen logboekactiviteiten gevonden.")
+        
+        if st.button("🔄 Ververs log"):
+            st.rerun()
+
 # --- TAB 2: LERAREN KOPPELEN ---
 with tab_leraren:
   st.subheader("Leraren Koppelen aan Lesuren")
@@ -786,29 +813,3 @@ with tab_excel:
             f"🎉 Gelukt! Alle {aantal_gelukt} leden zijn succesvol geïmporteerd."
         )
 
-# --- VERBORGEN DEVELOPER DASHBOARD (Alleen voor jou) ---
-huidige_gebruiker_email = ""
-try:
-    if hasattr(st, "user") and st.user and hasattr(st.user, "email"):
-        huidige_gebruiker_email = st.user.email
-    elif hasattr(st, "experimental_user") and st.experimental_user and hasattr(st.experimental_user, "email"):
-        huidige_gebruiker_email = st.experimental_user.email
-except Exception:
-    pass
-
-DEVELOPER_EMAILS = ["jason7mei@gmail.com", "jason007t@outlook.com"]
-
-if huidige_gebruiker_email in DEVELOPER_EMAILS:
-    with st.sidebar.expander("🛠️ Developer Dashboard (Geheim)"):
-        st.success(f"Ingelogd als: {huidige_gebruiker_email}")
-        
-        st.markdown("### 📋 Recente Activiteiten")
-        logs = database.haal_audit_logs_op()
-        if logs:
-            for log in logs:
-                st.caption(f"🕒 {log['tijdstip'][:19]} | **{log['email']}**\n↳ {log['actie']}")
-        else:
-            st.info("Nog geen logboekactiviteiten gevonden.")
-        
-        if st.button("🔄 Ververs log"):
-            st.rerun()
